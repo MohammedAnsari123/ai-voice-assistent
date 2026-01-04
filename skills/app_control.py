@@ -55,13 +55,20 @@ class AppControlSkill:
                 # Try the app name directly
                 exe_name = app_name
                 
-            # Try to open the application
-            subprocess.Popen(exe_name)
+            # Try to open the application using os.startfile (Windows only, but reliable)
+            if hasattr(os, 'startfile'):
+                os.startfile(exe_name)
+            else:
+                # Fallback for non-Windows (or headless if startfile missing)
+                subprocess.Popen(exe_name, shell=True)
+                
             return f"Opening {app_name}."
             
+        except FileNotFoundError:
+             return f"Sorry, I couldn't find the application '{app_name}'."
         except Exception as e:
             self.logger.error(f"Failed to open {app_name}: {e}")
-            return f"Sorry, I couldn't open {app_name}."
+            return f"Sorry, I couldn't open {app_name}. Error: {str(e)}"
     
     def close_app(self, app_name: str) -> str:
         """

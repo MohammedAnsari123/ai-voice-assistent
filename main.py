@@ -50,9 +50,17 @@ async def generate_response(request: GenerateRequest):
             if "open" in words:
                 idx = words.index("open")
                 if idx + 1 < len(words):
-                    app_name = words[idx + 1]
+                    potential_app = words[idx + 1]
+                    
+                    # Handle "open the [app]"
+                    if potential_app == "the" and idx + 2 < len(words):
+                        potential_app = words[idx + 2]
+                    
+                    app_name = potential_app
+                    
                     # Check if it looks like an app or is in our list
-                    if app_name in app_control.app_map or "app" in prompt_lower or idx + 1 < len(words): 
+                    # We relax the condition to allow trying to open unknown apps via system command
+                    if app_name in app_control.app_map or "app" in prompt_lower or True: 
                         return {"response": app_control.open_app(app_name)}
 
         # Close App
