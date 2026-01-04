@@ -35,8 +35,15 @@ app_control = AppControlSkill()
 class GenerateRequest(BaseModel):
     prompt: str
 
+# Initialize Memory
+conversation_history = [
+    {"role": "system", "content": "You are Jarves, a helpful and intelligent voice assistant. Keep your responses concise and conversational, suitable for a voice interface."}
+]
+MAX_HISTORY = 20
+
 @app.post("/generate")
 async def generate_response(request: GenerateRequest):
+    global conversation_history
     try:
         prompt_lower = request.prompt.lower()
         print(f"Received prompt: {request.prompt}")
@@ -51,15 +58,10 @@ async def generate_response(request: GenerateRequest):
                 idx = words.index("open")
                 if idx + 1 < len(words):
                     potential_app = words[idx + 1]
-                    
                     # Handle "open the [app]"
                     if potential_app == "the" and idx + 2 < len(words):
                         potential_app = words[idx + 2]
-                    
                     app_name = potential_app
-                    
-                    # Check if it looks like an app or is in our list
-                    # We relax the condition to allow trying to open unknown apps via system command
                     if app_name in app_control.app_map or "app" in prompt_lower or True: 
                         return {"response": app_control.open_app(app_name)}
 
@@ -83,15 +85,13 @@ async def generate_response(request: GenerateRequest):
             if "mute" in prompt_lower or "unmute" in prompt_lower:
                 return {"response": SystemSkills.mute_volume()}
             elif "set" in prompt_lower: 
-                # e.g. "set volume to 50%"
                 match = re.search(r'\d+', prompt_lower)
                 if match:
                     level = int(match.group())
                     return {"response": SystemSkills.set_volume(level)}
             elif "up" in prompt_lower or "increase" in prompt_lower:
-                return {"response": SystemSkills.set_volume(50)} # Relative up approximation
+                return {"response": SystemSkills.set_volume(50)} 
             elif "down" in prompt_lower or "decrease" in prompt_lower:
-                 # Hack: volume down logic via loop in SystemSkills
                  return {"response": "Lowering volume..."} 
 
         # 4. System Control - Brightness
@@ -112,7 +112,6 @@ async def generate_response(request: GenerateRequest):
             return {"response": SystemSkills.minimize_all()}
             
         if "type" in prompt_lower:
-            # e.g. "type hello world"
             text_to_type = prompt_lower.replace("type", "", 1).strip()
             if text_to_type:
                 return {"response": SystemSkills.type_text(text_to_type)}
@@ -120,30 +119,40 @@ async def generate_response(request: GenerateRequest):
         if "shutdown" in prompt_lower:
              return {"response": SystemSkills.shutdown_pc()}
 
-        # --- Fallback to LLM ---
-        messages = [
-            {
-                "role": "system",
-                "content": "You are Jarves, a helpful and intelligent voice assistant. Keep your responses concise and conversational, suitable for a voice interface."
-            },
-            {
-                "role": "user",
-                "content": request.prompt,
-            }
-        ]
+        # --- Memory Management & LLM Fallback ---
         
+        # Add User Message to History
+        conversation_history.append({"role": "user", "content": request.prompt})
+        
+        # Truncate History if too long (keep system prompt + last N messages)
+        if len(conversation_history) > MAX_HISTORY:
+            # Keep index 0 (System) and the last (MAX_HISTORY - 1) messages
+            conversation_history = [conversation_history[0]] + conversation_history[-(MAX_HISTORY-1):]
+
         chat_completion = client.chat.completions.create(
-            messages=messages,
+            messages=conversation_history,
             model="llama-3.3-70b-versatile",
         )
         
         response_text = chat_completion.choices[0].message.content
+        
+        # Add Assistant Response to History
+        conversation_history.append({"role": "assistant", "content": response_text})
+        
         print(f"Generated response: {response_text}")
         return {"response": response_text}
 
     except Exception as e:
         print(f"Error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/reset")
+async def reset_memory():
+    global conversation_history
+    conversation_history = [
+        {"role": "system", "content": "You are Jarves, a helpful and intelligent voice assistant. Keep your responses concise and conversational, suitable for a voice interface."}
+    ]
+    return {"message": "Memory reset."}
 
 if __name__ == "__main__":
     import uvicorn
