@@ -1,24 +1,30 @@
-import screen_brightness_control as sbc
-import pyautogui
+try:
+    import screen_brightness_control as sbc
+    import pyautogui
+    SKILLS_AVAILABLE = True
+except (ImportError, KeyError, OSError):
+    # KeyError: 'DISPLAY' handled here for headless environments
+    SKILLS_AVAILABLE = False
+    print("Warning: System control skills unavailable (Headless/No Display detected).")
+
 import math
 
 class SystemSkills:
     @staticmethod
+    def _check_availability():
+        if not SKILLS_AVAILABLE:
+            return False, "I cannot control this system (Headless environment detected)."
+        return True, ""
+
+    @staticmethod
     def set_volume(level: int):
-        # PyAutoGUI can't set exact percentage easily without external tools, 
-        # so we will just support mute/unmute or standard key presses.
-        # For this requirement, we will try to approximate or just inform the user.
-        # Better approach: Use nircmd (if available) or just stick to key presses.
-        # For now, let's use the keyboard keys to change volume relatively.
-        
-        # To strictly "set" volume, we would need pycaw. Since pycaw failed, 
-        # let's fallback to telling the user or using a simple loop of presses.
-        # A simple hack: Press volume down 50 times (mute), then up N times.
+        available, msg = SystemSkills._check_availability()
+        if not available: return msg
+
         try:
             for _ in range(50):
                 pyautogui.press("volumedown")
             
-            # Approx: 2 steps per press usually, strictly imprecise but working.
             clicks = int(level / 2) 
             for _ in range(clicks):
                 pyautogui.press("volumeup")
@@ -29,6 +35,9 @@ class SystemSkills:
 
     @staticmethod
     def mute_volume():
+        available, msg = SystemSkills._check_availability()
+        if not available: return msg
+
         try:
             pyautogui.press("volumemute")
             return "Volume muted/unmuted."
@@ -37,6 +46,9 @@ class SystemSkills:
 
     @staticmethod
     def set_brightness(level: int):
+        available, msg = SystemSkills._check_availability()
+        if not available: return msg
+
         try:
             level = max(0, min(100, level))
             sbc.set_brightness(level)
@@ -46,12 +58,13 @@ class SystemSkills:
 
     @staticmethod
     def take_screenshot():
+        available, msg = SystemSkills._check_availability()
+        if not available: return msg
+
         try:
-            # Save to user's Pictures folder or current dir
             import os
             from datetime import datetime
             
-            # Simple timestamped filename
             filename = f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
             pyautogui.screenshot(filename)
             return f"Screenshot saved as {filename}."
@@ -60,6 +73,9 @@ class SystemSkills:
 
     @staticmethod
     def lock_pc():
+        available, msg = SystemSkills._check_availability()
+        if not available: return msg
+
         try:
             import ctypes
             ctypes.windll.user32.LockWorkStation()
@@ -69,12 +85,16 @@ class SystemSkills:
 
     @staticmethod
     def shutdown_pc():
-        # Warning: This shuts down immediately
-        # os.system("shutdown /s /t 5")
+        available, msg = SystemSkills._check_availability()
+        if not available: return msg
+
         return "I can request a shutdown, but for safety, please confirm manually. (Command: shutdown /s /t 5)"
 
     @staticmethod
     def minimize_all():
+        available, msg = SystemSkills._check_availability()
+        if not available: return msg
+
         try:
             pyautogui.hotkey('win', 'd')
             return "Minimized all windows."
@@ -83,6 +103,9 @@ class SystemSkills:
 
     @staticmethod
     def type_text(text: str):
+        available, msg = SystemSkills._check_availability()
+        if not available: return msg
+
         try:
             pyautogui.write(text, interval=0.05)
             return f"Typed: {text}"
